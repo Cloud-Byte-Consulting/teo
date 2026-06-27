@@ -3,8 +3,8 @@ package convert_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"truenas-scale-1.tail5a208d.ts.net/Cloud-Byte-Consulting/teo"
-	"truenas-scale-1.tail5a208d.ts.net/Cloud-Byte-Consulting/teo/convert"
+	"github.com/cloud-byte-consulting/teo"
+	"github.com/cloud-byte-consulting/teo/convert"
 )
 
 // mustValidTEO asserts the rendered document re-parses, the invariant every

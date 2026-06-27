@@ -5,7 +5,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"truenas-scale-1.tail5a208d.ts.net/Cloud-Byte-Consulting/teo"
+	"github.com/cloud-byte-consulting/teo"
 )
 
 var _ = Describe("TEO", func() {

@@ -4,7 +4,7 @@ package main
 import (
 	"os"
 
-	"truenas-scale-1.tail5a208d.ts.net/Cloud-Byte-Consulting/teo/internal/cli"
+	"github.com/cloud-byte-consulting/teo/internal/cli"
 )
 
 func main() {

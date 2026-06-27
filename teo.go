@@ -5,7 +5,7 @@
 // round-trips can be used as a test oracle: parse(emit(data)) reconstructs data.
 //
 // The core package is dependency-free (stdlib only). Conversion from
-// JSON/YAML lives in the sibling package truenas-scale-1.tail5a208d.ts.net/Cloud-Byte-Consulting/teo/convert so
+// JSON/YAML lives in the sibling package github.com/cloud-byte-consulting/teo/convert so
 // that importers needing only the builder/parser take on no extra dependencies.
 package teo
 

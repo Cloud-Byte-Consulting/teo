@@ -37,7 +37,7 @@ import (
 	"strings"
 
 	yaml "go.yaml.in/yaml/v3"
-	"truenas-scale-1.tail5a208d.ts.net/Cloud-Byte-Consulting/teo"
+	"github.com/cloud-byte-consulting/teo"
 )
 
 // Options configures conversion.

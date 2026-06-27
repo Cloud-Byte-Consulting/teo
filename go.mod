@@ -1,4 +1,4 @@
-module truenas-scale-1.tail5a208d.ts.net/Cloud-Byte-Consulting/teo
+module github.com/cloud-byte-consulting/teo
 
 go 1.25.0
 

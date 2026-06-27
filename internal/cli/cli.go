@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"truenas-scale-1.tail5a208d.ts.net/Cloud-Byte-Consulting/teo"
-	"truenas-scale-1.tail5a208d.ts.net/Cloud-Byte-Consulting/teo/convert"
+	"github.com/cloud-byte-consulting/teo"
+	"github.com/cloud-byte-consulting/teo/convert"
 )
 
 // Version is overridden at build time via -ldflags "-X .../cli.Version=...".
