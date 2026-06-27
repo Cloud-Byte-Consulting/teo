@@ -1,0 +1,9 @@
+{
+  "description": "open issues for acme/widgets",
+  "count": 3,
+  "issues": [
+    { "number": 42, "title": "Fix login bug", "state": "open", "author": "alice" },
+    { "number": 43, "title": "Add dark mode, finally", "state": "open", "author": "bob" },
+    { "number": 44, "title": "Crash on empty input", "state": "open", "author": null }
+  ]
+}
