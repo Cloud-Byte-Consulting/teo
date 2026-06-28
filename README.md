@@ -5,6 +5,17 @@ structure once and drops JSON's per-value punctuation. This repo is the
 canonical home of the TEO **library**, **converter**, and **CLI**; see
 [`teo-format.md`](teo-format.md) for the grammar.
 
+## Part of the Governed Agentic Platform
+
+teo is the **token/cost plane** of the Open Engine platform — a token-efficient
+output format that shrinks LLM payloads. Start at
+[the platform getting-started guide](https://github.com/Cloud-Byte-Consulting/agentic-harness/blob/main/GETTING_STARTED.md).
+Sibling pillars:
+
+- [agentic-harness](https://github.com/Cloud-Byte-Consulting/agentic-harness) — the governed `air` CLI; its `--teo` output mode consumes this module.
+- [Cachy](https://github.com/Cloud-Byte-Consulting/Cachy) — caching that complements TEO on the same token/cost pillar.
+- [token-dashboard](https://github.com/Cloud-Byte-Consulting/token-dashboard) — visualizes the token/cost savings TEO produces.
+
 ```
 count: 3
 issues[3]{number,title,state,author}:
@@ -13,13 +24,13 @@ issues[3]{number,title,state,author}:
   44,Crash on empty input,open,null
 ```
 
-## Library (`truenas-scale-1.tail5a208d.ts.net/Cloud-Byte-Consulting/teo`)
+## Library (`github.com/cloud-byte-consulting/teo`)
 
 Dependency-free builder + parser + validator. `parse(emit(x))` reconstructs `x`,
 so it doubles as a round-trip test oracle.
 
 ```go
-import "truenas-scale-1.tail5a208d.ts.net/Cloud-Byte-Consulting/teo"
+import "github.com/cloud-byte-consulting/teo"
 
 doc := teo.New()
 doc.Count(3)
@@ -35,7 +46,7 @@ err = teo.Validate(out)         // well-formedness check
 Builders: `Scalar`, `Count`, `Record`, `Block`/`Row`, `Help`. Accessors:
 `FindBlock`, `GetScalar`. Value codecs: `EncodeValue` / `DecodeValue`.
 
-## Converter (`truenas-scale-1.tail5a208d.ts.net/Cloud-Byte-Consulting/teo/convert`)
+## Converter (`github.com/cloud-byte-consulting/teo/convert`)
 
 JSON/YAML → TEO. Kept in a sibling package so the core library stays
 dependency-free (only the converter pulls in a YAML decoder).
@@ -93,13 +104,7 @@ go test ./e2e      # e2e only (builds the binary, drives it as a subprocess)
 
 ## Consumers
 
-`github.com/cloud-byte/air` imports this module for its `--teo` output via a
-normal versioned require on `truenas-scale-1.tail5a208d.ts.net/Cloud-Byte-Consulting/teo`,
-resolved straight from the Cloud-Byte-Consulting Gitea over HTTPS (a valid
-`go-import` meta tag is served on the default port). Consumers set
-`GOPRIVATE=truenas-scale-1.tail5a208d.ts.net` so `go` fetches it directly,
-skipping the public proxy and checksum database. No `replace` directive is
-needed.
-
-> The module path embeds the current Tailscale hostname; a stable custom domain
-> (CNAME → the Gitea) can be swapped in later via a repo-wide find/replace.
+The [agentic-harness](https://github.com/Cloud-Byte-Consulting/agentic-harness)
+`air` CLI imports this module for its `--teo` output via a normal versioned
+require on `github.com/cloud-byte-consulting/teo` (see its `go.mod`). No
+`replace` directive is needed.
