@@ -1,0 +1,2 @@
+{"name":"api","replicas":3}
+{"name":"worker","replicas":1}

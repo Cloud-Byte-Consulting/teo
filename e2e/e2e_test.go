@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cloud-byte-consulting/teo"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/cloud-byte-consulting/teo"
 )
 
 // run invokes the built binary with optional stdin and returns code/stdout/stderr.
@@ -50,6 +50,20 @@ var _ = Describe("teo binary", func() {
 		code, yamlOut, errOut := run("", "convert", dataPath("issues.yaml"))
 		Expect(code).To(Equal(0), errOut)
 		Expect(yamlOut).To(Equal(jsonOut))
+	})
+
+	It("converts CSV file input", func() {
+		code, out, errOut := run("", "convert", dataPath("issues.csv"))
+		Expect(code).To(Equal(0), errOut)
+		Expect(teo.Validate(out)).To(Succeed())
+		Expect(out).To(ContainSubstring("items[3]{number,title,state,author}:"))
+	})
+
+	It("converts JSONC file input", func() {
+		code, out, errOut := run("", "convert", dataPath("services.jsonc"))
+		Expect(code).To(Equal(0), errOut)
+		Expect(teo.Validate(out)).To(Succeed())
+		Expect(out).To(ContainSubstring("services[2]{name,replicas}:"))
 	})
 
 	It("reads from a stdin pipeline", func() {

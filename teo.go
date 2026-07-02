@@ -4,9 +4,9 @@
 // provides a builder (Document), a Parser, and Validate, so emit/parse
 // round-trips can be used as a test oracle: parse(emit(data)) reconstructs data.
 //
-// The core package is dependency-free (stdlib only). Conversion from
-// JSON/YAML lives in the sibling package github.com/cloud-byte-consulting/teo/convert so
-// that importers needing only the builder/parser take on no extra dependencies.
+// The core package is dependency-free (stdlib only). Conversion from standard
+// input formats lives in the sibling package github.com/cloud-byte-consulting/teo/convert
+// so importers needing only the builder/parser take on no extra dependencies.
 package teo
 
 import (

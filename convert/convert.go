@@ -1,8 +1,8 @@
-// Package convert turns JSON or YAML into a TEO document.
+// Package convert turns standard data formats into a TEO document.
 //
 // TEO is two-level: top-level scalars, named blocks (arrays of uniform
-// objects), and records (an object of scalar fields). Arbitrary JSON/YAML has
-// no single canonical TEO projection, so this package applies a fixed,
+// objects), and records (an object of scalar fields). Arbitrary structured
+// input has no single canonical TEO projection, so this package applies a fixed,
 // documented policy:
 //
 //   - Root object → each key emitted by value shape (below).
@@ -10,7 +10,7 @@
 //   - Root array of scalars → block RootName with a single "value" column.
 //   - Root scalar → `value: <scalar>`.
 //
-// Per key inside an object:
+// Per key inside a structured object:
 //
 //   - scalar (string/number/bool/null) → `key: value`.
 //   - array of objects → block keyed by the union of element keys (sorted;
@@ -20,6 +20,8 @@
 //   - object whose values are all scalars → record.
 //   - object with nested objects/arrays → JSON-encoded onto a single scalar
 //     line (depth beyond what TEO models is preserved losslessly as JSON text).
+//   - CSV/TSV → one block named by Options.RootName ("items"), using the first
+//     row as headers unless Options.NoHeader is true.
 //
 // Object/record/block *names* are sanitized to the TEO key grammar
 // (`[a-z][a-z0-9_]*`): lowercased, non-conforming runes replaced with `_`, and
@@ -32,12 +34,14 @@ package convert
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
-	yaml "go.yaml.in/yaml/v3"
 	"github.com/cloud-byte-consulting/teo"
+	yaml "go.yaml.in/yaml/v3"
 )
 
 // Options configures conversion.
@@ -45,6 +49,10 @@ type Options struct {
 	// RootName is the block name used when the document root is an array.
 	// Defaults to "items".
 	RootName string
+
+	// NoHeader makes CSV/TSV conversion treat every row as data and generate
+	// field names col1, col2, etc. By default, the first row is used as headers.
+	NoHeader bool
 }
 
 func (o *Options) rootName() string {
@@ -56,13 +64,193 @@ func (o *Options) rootName() string {
 
 // FromJSON parses JSON bytes and converts them to a TEO document.
 func FromJSON(data []byte, o *Options) (*teo.Document, error) {
+	v, err := decodeJSON(data)
+	if err != nil {
+		return nil, fmt.Errorf("parse json: %w", err)
+	}
+	return FromValue(normalize(v), o)
+}
+
+// FromJSONC parses JSON with comments and trailing commas, then converts it to
+// a TEO document.
+func FromJSONC(data []byte, o *Options) (*teo.Document, error) {
+	clean, err := stripJSONC(data)
+	if err != nil {
+		return nil, fmt.Errorf("parse jsonc: %w", err)
+	}
+	v, err := decodeJSON(clean)
+	if err != nil {
+		return nil, fmt.Errorf("parse jsonc: %w", err)
+	}
+	return FromValue(normalize(v), o)
+}
+
+// FromNDJSON parses newline-delimited JSON bytes and converts them to a TEO
+// document. Blank lines are ignored. FromJSONL is an alias for callers that use
+// that name for the same line-delimited JSON format.
+func FromNDJSON(data []byte, o *Options) (*teo.Document, error) {
+	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
+	values := make([]any, 0, len(lines))
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		v, err := decodeJSON([]byte(line))
+		if err != nil {
+			return nil, fmt.Errorf("parse ndjson line %d: %w", i+1, err)
+		}
+		values = append(values, normalize(v))
+	}
+	return FromValue(values, o)
+}
+
+// FromJSONL parses JSON Lines input. It is equivalent to FromNDJSON.
+func FromJSONL(data []byte, o *Options) (*teo.Document, error) {
+	return FromNDJSON(data, o)
+}
+
+// FromCSV parses CSV bytes and converts them to a TEO document.
+func FromCSV(data []byte, o *Options) (*teo.Document, error) {
+	return fromDelimited(data, ',', "csv", o)
+}
+
+// FromTSV parses tab-separated bytes and converts them to a TEO document.
+func FromTSV(data []byte, o *Options) (*teo.Document, error) {
+	return fromDelimited(data, '\t', "tsv", o)
+}
+
+func decodeJSON(data []byte) (any, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	var v any
 	if err := dec.Decode(&v); err != nil {
-		return nil, fmt.Errorf("parse json: %w", err)
+		return nil, err
 	}
-	return FromValue(normalize(v), o)
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("multiple JSON values; use ndjson/jsonl for line-delimited input")
+		}
+		return nil, err
+	}
+	return v, nil
+}
+
+func stripJSONC(data []byte) ([]byte, error) {
+	withoutComments, err := stripJSONCComments(data)
+	if err != nil {
+		return nil, err
+	}
+	return stripTrailingCommas(withoutComments), nil
+}
+
+func stripJSONCComments(data []byte) ([]byte, error) {
+	out := make([]byte, 0, len(data))
+	inString := false
+	escaped := false
+	for i := 0; i < len(data); i++ {
+		c := data[i]
+		if inString {
+			out = append(out, c)
+			if escaped {
+				escaped = false
+				continue
+			}
+			switch c {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+			continue
+		}
+
+		if c == '"' {
+			inString = true
+			out = append(out, c)
+			continue
+		}
+		if c == '/' && i+1 < len(data) {
+			switch data[i+1] {
+			case '/':
+				i += 2
+				for i < len(data) && data[i] != '\n' && data[i] != '\r' {
+					i++
+				}
+				if i < len(data) {
+					out = append(out, data[i])
+				}
+				continue
+			case '*':
+				i += 2
+				closed := false
+				for i < len(data)-1 {
+					if data[i] == '\n' || data[i] == '\r' {
+						out = append(out, data[i])
+					}
+					if data[i] == '*' && data[i+1] == '/' {
+						i++
+						closed = true
+						break
+					}
+					i++
+				}
+				if !closed {
+					return nil, fmt.Errorf("unterminated block comment")
+				}
+				continue
+			}
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+func stripTrailingCommas(data []byte) []byte {
+	out := make([]byte, 0, len(data))
+	inString := false
+	escaped := false
+	for i := 0; i < len(data); i++ {
+		c := data[i]
+		if inString {
+			out = append(out, c)
+			if escaped {
+				escaped = false
+				continue
+			}
+			switch c {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+			continue
+		}
+
+		if c == '"' {
+			inString = true
+			out = append(out, c)
+			continue
+		}
+		if c == ',' {
+			j := i + 1
+			for j < len(data) {
+				switch data[j] {
+				case ' ', '\t', '\r', '\n':
+					j++
+				default:
+					goto checked
+				}
+			}
+		checked:
+			if j < len(data) && (data[j] == '}' || data[j] == ']') {
+				continue
+			}
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 // FromYAML parses YAML bytes and converts them to a TEO document.
@@ -72,6 +260,55 @@ func FromYAML(data []byte, o *Options) (*teo.Document, error) {
 		return nil, fmt.Errorf("parse yaml: %w", err)
 	}
 	return FromValue(normalize(v), o)
+}
+
+func fromDelimited(data []byte, comma rune, label string, o *Options) (*teo.Document, error) {
+	r := csv.NewReader(bytes.NewReader(data))
+	r.Comma = comma
+	records, err := r.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", label, err)
+	}
+	if len(records) == 0 {
+		return nil, fmt.Errorf("parse %s: empty input", label)
+	}
+
+	var headers []string
+	rows := records
+	if o == nil || !o.NoHeader {
+		headers = records[0]
+		rows = records[1:]
+	} else {
+		headers = generatedFields(len(records[0]))
+	}
+
+	fields := make([]string, len(headers))
+	for i, h := range headers {
+		h = strings.TrimSpace(h)
+		if h == "" {
+			h = fmt.Sprintf("col%d", i+1)
+		}
+		fields[i] = sanitizeField(h)
+	}
+
+	d := teo.New()
+	bh := d.Block(o.rootName(), fields...)
+	for _, row := range rows {
+		vals := make([]any, len(row))
+		for i, cell := range row {
+			vals[i] = cell
+		}
+		bh.Row(vals...)
+	}
+	return d, nil
+}
+
+func generatedFields(n int) []string {
+	fields := make([]string, n)
+	for i := range fields {
+		fields[i] = fmt.Sprintf("col%d", i+1)
+	}
+	return fields
 }
 
 // FromValue converts an already-decoded value (the result of unmarshalling

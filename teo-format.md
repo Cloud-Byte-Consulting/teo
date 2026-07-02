@@ -1,6 +1,6 @@
 # TEO format grammar
 
-The precise grammar for Token-Efficient Output. Read this before writing a formatter so every command emits a consistent, parseable shape. TEO is line-oriented and indentation-structured. It is designed to be dense for an agent to read while remaining trivial to parse and unambiguous.
+The precise grammar for Token-Efficient Output. Read this before writing a formatter so every command emits a consistent, parseable shape. TEO is line-oriented and indentation-structured. It is designed to be dense for downstream tools to read while remaining trivial to parse and unambiguous.
 
 ## Contents
 - Design goals
@@ -21,7 +21,7 @@ The precise grammar for Token-Efficient Output. Read this before writing a forma
 1. Declare repeated structure (field names) once, not per row.
 2. Drop punctuation that JSON repeats per value (braces, quotes-when-unneeded, commas-as-separators-only).
 3. Stay unambiguous: a parser must reconstruct the data without guessing.
-4. Keep it diffable and greppable so the agent can pipe it through shell tools.
+4. Keep it diffable and greppable so programs can pipe it through shell tools.
 
 ## Line types
 A TEO document is a sequence of lines of three kinds:
@@ -63,11 +63,11 @@ name[count]{field1,field2,field3}:
 ## Help blocks
 ```
 help[2]:
-  Run `mytool issue view <number>`
-  Run `mytool issue create --title "..."`
+  Run `teo convert data.json`
+  Run `teo validate output.teo`
 ```
 - `n` in `help[n]` is the number of suggestion lines.
-- Each suggestion is a concrete next command. Carry forward fixed flags (like `--teo`); leave runtime values as `<placeholder>` rather than guessing them.
+- Each suggestion is a concrete next command. Carry forward fixed flags (like `--name rows`); leave runtime values as `<placeholder>` rather than guessing them.
 
 ## Quoting and escaping
 Values are bare by default. Quote with double quotes **only when necessary**, i.e. when the raw value contains any of:
@@ -111,7 +111,8 @@ Never emit silent empty output. For an empty list, still emit the count and the 
 ```
 count: 0
 issues[0]{number,title,state}:
-help[1]: Run `mytool issue list --state all --teo`
+help[1]:
+  Run `teo convert issues.csv --name issues`
 ```
 Optionally add a human-meaningful `note:` line (`note: no open issues`). The point is that `count: 0` is an explicit, unambiguous signal that the query succeeded and returned nothing.
 
@@ -153,11 +154,11 @@ issues[14]{number,title,state,author}:
   44,Crash on empty input,open,null
   ...
 help[2]:
-  Run `mytool issue view <number> --teo`
-  Run `mytool issue list --state all --teo`
+  Run `teo convert next-page.json --name issues`
+  Run `teo validate issues.teo`
 ```
 Notes on this example:
-- `count:` carries the grand total so the agent knows the list is partial.
+- `count:` carries the grand total so consumers know the list is partial.
 - Row 43's title is quoted because it contains a comma.
 - Row 44's author is `null` (unassigned), distinct from an empty string.
-- The `help[]` block carries `--teo` forward and leaves `<number>` as a placeholder.
+- The `help[]` block carries forward concrete follow-up commands.

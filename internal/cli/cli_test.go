@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	"github.com/cloud-byte-consulting/teo"
 	"github.com/cloud-byte-consulting/teo/internal/cli"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 // runCLI exercises the in-process entry point and returns code, stdout, stderr.
@@ -37,6 +37,36 @@ var _ = Describe("CLI", func() {
 			Expect(yamlOut).To(Equal(jsonOut))
 		})
 
+		It("converts a CSV file using the first row as headers", func() {
+			code, out, errOut := runCLI("", "convert", dataPath("issues.csv"))
+			Expect(code).To(Equal(0), errOut)
+			Expect(teo.Validate(out)).To(Succeed())
+			Expect(out).To(ContainSubstring("items[3]{number,title,state,author}:"))
+			parsed, _ := teo.Parse(out)
+			Expect(parsed.FindBlock("items").Rows[0]).To(Equal([]any{"42", "Fix login bug", "open", "alice"}))
+		})
+
+		It("converts a TSV file using the first row as headers", func() {
+			code, out, errOut := runCLI("", "convert", dataPath("issues.tsv"))
+			Expect(code).To(Equal(0), errOut)
+			Expect(teo.Validate(out)).To(Succeed())
+			Expect(out).To(ContainSubstring("items[3]{number,title,state,author}:"))
+		})
+
+		It("converts a JSONC file", func() {
+			code, out, errOut := runCLI("", "convert", dataPath("services.jsonc"))
+			Expect(code).To(Equal(0), errOut)
+			Expect(teo.Validate(out)).To(Succeed())
+			Expect(out).To(ContainSubstring("services[2]{name,replicas}:"))
+		})
+
+		It("converts an NDJSON file", func() {
+			code, out, errOut := runCLI("", "convert", "--name", "services", dataPath("services.ndjson"))
+			Expect(code).To(Equal(0), errOut)
+			Expect(teo.Validate(out)).To(Succeed())
+			Expect(out).To(ContainSubstring("services[2]{name,replicas}:"))
+		})
+
 		It("auto-detects JSON from stdin", func() {
 			code, out, _ := runCLI(`{"name":"acme","tags":["a","b"]}`, "convert")
 			Expect(code).To(Equal(0))
@@ -51,10 +81,22 @@ var _ = Describe("CLI", func() {
 			Expect(out).To(ContainSubstring("count: 2"))
 		})
 
+		It("auto-detects NDJSON from stdin", func() {
+			code, out, errOut := runCLI("{\"name\":\"api\"}\n{\"name\":\"worker\"}\n", "convert", "--name", "services")
+			Expect(code).To(Equal(0), errOut)
+			Expect(out).To(ContainSubstring("services[2]{name}:"))
+		})
+
 		It("honors an explicit --from json", func() {
 			code, out, _ := runCLI(`{"a":1}`, "convert", "--from", "json", "-")
 			Expect(code).To(Equal(0))
 			Expect(out).To(ContainSubstring("a: 1"))
+		})
+
+		It("honors --no-header for CSV input", func() {
+			code, out, errOut := runCLI("alice,open\nbob,closed\n", "convert", "--from", "csv", "--no-header", "--name", "rows")
+			Expect(code).To(Equal(0), errOut)
+			Expect(out).To(ContainSubstring("rows[2]{col1,col2}:"))
 		})
 
 		It("honors --name for a root array", func() {

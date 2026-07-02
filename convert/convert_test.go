@@ -1,10 +1,10 @@
 package convert_test
 
 import (
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	"github.com/cloud-byte-consulting/teo"
 	"github.com/cloud-byte-consulting/teo/convert"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 // mustValidTEO asserts the rendered document re-parses, the invariant every
@@ -100,6 +100,12 @@ var _ = Describe("convert", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
+		It("rejects multiple top-level JSON values", func() {
+			_, err := convert.FromJSON([]byte("{}\n{}"), nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("ndjson/jsonl"))
+		})
+
 		It("is deterministic across repeated runs", func() {
 			in := []byte(`{"c":1,"a":2,"b":3}`)
 			first, _ := convert.FromJSON(in, nil)
@@ -119,6 +125,75 @@ var _ = Describe("convert", func() {
 			jDoc, err := convert.FromJSON([]byte(jsonIn), nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(yDoc.String()).To(Equal(jDoc.String()))
+		})
+	})
+
+	Describe("FromJSONC", func() {
+		It("accepts comments and trailing commas", func() {
+			in := []byte(`{
+				// line comments are allowed
+				"services": [
+					{"name": "api", "url": "https://example.test",},
+				],
+			}`)
+			doc, err := convert.FromJSONC(in, nil)
+			Expect(err).NotTo(HaveOccurred())
+			out := mustValidTEO(doc)
+			Expect(out).To(ContainSubstring("services[1]{name,url}:"))
+			Expect(out).To(ContainSubstring("api,https://example.test"))
+		})
+	})
+
+	Describe("FromNDJSON", func() {
+		It("turns JSON lines into a root block", func() {
+			in := []byte("{\"name\":\"api\",\"replicas\":2}\n{\"name\":\"worker\",\"replicas\":1}\n")
+			doc, err := convert.FromNDJSON(in, &convert.Options{RootName: "services"})
+			Expect(err).NotTo(HaveOccurred())
+			out := mustValidTEO(doc)
+			Expect(out).To(ContainSubstring("services[2]{name,replicas}:"))
+			parsed, _ := teo.Parse(out)
+			Expect(parsed.FindBlock("services").Rows).To(Equal([][]any{
+				{"api", 2},
+				{"worker", 1},
+			}))
+		})
+	})
+
+	Describe("FromCSV", func() {
+		It("uses the first row as headers by default", func() {
+			in := []byte("number,title\n1,Fix login bug\n2,\"Add dark mode, finally\"\n")
+			doc, err := convert.FromCSV(in, &convert.Options{RootName: "issues"})
+			Expect(err).NotTo(HaveOccurred())
+			out := mustValidTEO(doc)
+			Expect(out).To(ContainSubstring("issues[2]{number,title}:"))
+			parsed, _ := teo.Parse(out)
+			Expect(parsed.FindBlock("issues").Rows).To(Equal([][]any{
+				{"1", "Fix login bug"},
+				{"2", "Add dark mode, finally"},
+			}))
+		})
+
+		It("can generate column names when there is no header row", func() {
+			doc, err := convert.FromCSV([]byte("alice,open\nbob,closed\n"), &convert.Options{
+				RootName: "rows",
+				NoHeader: true,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			out := mustValidTEO(doc)
+			Expect(out).To(ContainSubstring("rows[2]{col1,col2}:"))
+			parsed, _ := teo.Parse(out)
+			Expect(parsed.FindBlock("rows").Rows[0]).To(Equal([]any{"alice", "open"}))
+		})
+	})
+
+	Describe("FromTSV", func() {
+		It("converts tab-separated rows", func() {
+			doc, err := convert.FromTSV([]byte("name\tstate\napi\topen\nworker\tclosed\n"), &convert.Options{RootName: "services"})
+			Expect(err).NotTo(HaveOccurred())
+			out := mustValidTEO(doc)
+			Expect(out).To(ContainSubstring("services[2]{name,state}:"))
+			parsed, _ := teo.Parse(out)
+			Expect(parsed.FindBlock("services").Rows[1]).To(Equal([]any{"worker", "closed"}))
 		})
 	})
 })

@@ -5,16 +5,12 @@ structure once and drops JSON's per-value punctuation. This repo is the
 canonical home of the TEO **library**, **converter**, and **CLI**; see
 [`teo-format.md`](teo-format.md) for the grammar.
 
-## Part of the Governed Agentic Platform
+## Purpose
 
-teo is the **token/cost plane** of the Open Engine platform — a token-efficient
-output format that shrinks LLM payloads. Start at
-[the platform getting-started guide](https://github.com/Cloud-Byte-Consulting/agentic-harness/blob/main/GETTING_STARTED.md).
-Sibling pillars:
-
-- [agentic-harness](https://github.com/Cloud-Byte-Consulting/agentic-harness) — the governed `air` CLI; its `--teo` output mode consumes this module.
-- [Cachy](https://github.com/Cloud-Byte-Consulting/Cachy) — caching that complements TEO on the same token/cost pillar.
-- [token-dashboard](https://github.com/Cloud-Byte-Consulting/token-dashboard) — visualizes the token/cost savings TEO produces.
+teo is a tool-agnostic conversion layer for standard machine-readable outputs.
+It accepts common structured and tabular inputs, then emits the same data in a
+compact TEO shape that is easy to diff, grep, validate, and pass through other
+programs.
 
 ```
 count: 3
@@ -48,15 +44,28 @@ Builders: `Scalar`, `Count`, `Record`, `Block`/`Row`, `Help`. Accessors:
 
 ## Converter (`github.com/cloud-byte-consulting/teo/convert`)
 
-JSON/YAML → TEO. Kept in a sibling package so the core library stays
-dependency-free (only the converter pulls in a YAML decoder).
+Standard inputs -> TEO. Kept in a sibling package so the core library stays
+dependency-free.
 
 ```go
 doc, err := convert.FromJSON(data, nil)
 doc, err := convert.FromYAML(data, &convert.Options{RootName: "rows"})
+doc, err := convert.FromJSONC(data, nil)
+doc, err := convert.FromNDJSON(data, &convert.Options{RootName: "events"})
+doc, err := convert.FromCSV(data, &convert.Options{RootName: "rows"})
+doc, err := convert.FromTSV(data, &convert.Options{RootName: "rows", NoHeader: true})
 ```
 
-**Projection policy** (TEO is two-level, so arbitrary JSON/YAML is mapped
+Supported input formats:
+
+- JSON (`.json`)
+- YAML (`.yaml`, `.yml`)
+- JSONC (`.jsonc`)
+- NDJSON / JSON Lines (`.ndjson`, `.jsonl`)
+- CSV (`.csv`)
+- TSV (`.tsv`)
+
+**Projection policy** (TEO is two-level, so arbitrary input is mapped
 deterministically):
 
 | Input shape                         | TEO output                                   |
@@ -66,34 +75,46 @@ deterministically):
 | array of scalars / mixed            | single-column block `key[n]{value}`          |
 | object of all-scalar fields         | record (`key:` + indented fields)            |
 | object containing objects/arrays    | JSON-encoded onto one scalar line (lossless) |
+| NDJSON / JSON Lines                 | root block from one JSON value per line      |
+| CSV / TSV with headers              | one block using the first row as fields      |
+| CSV / TSV without headers           | one block using `col1`, `col2`, etc.         |
 
 Object/record/block **names** are sanitized to the key grammar
 `[a-z][a-z0-9_]*` (lowercased; non-conforming runes → `_`; a `k` is prefixed
 when the first rune is not a letter). Source object key order is **not**
 preserved — Go map decoding drops it, so keys are emitted sorted.
 
+CSV and TSV values are preserved as strings because those formats do not carry
+native type information. By default, the first row is treated as a header row;
+set `Options.NoHeader` or pass `--no-header` in the CLI to generate `col1`,
+`col2`, etc.
+
 ## CLI (`cmd/teo`)
 
 ```
-teo convert [--from auto|json|yaml] [--name NAME] [file]   # stdin if no file / "-"
-teo validate [file]                                        # well-formedness check
+teo convert [--from auto|json|yaml|jsonc|csv|tsv|ndjson|jsonl] [--name NAME] [--no-header] [file]
+teo validate [file]   # well-formedness check
 teo version
 ```
 
 ```sh
 go build ./cmd/teo
 teo convert data.json | teo validate
+teo convert data.csv --name rows
+teo convert --from csv --no-header --name rows < data.txt
 echo '{"svc":"api","replicas":3}' | teo convert
 ```
 
 `--from auto` (default) picks the format from the file extension, falling back
-to content sniffing for stdin.
+to content sniffing for stdin. Ambiguous stdin can always be pinned with
+`--from`.
 
 ## Tests
 
 ```sh
 go test ./...      # unit + integration + e2e
 go test ./e2e      # e2e only (builds the binary, drives it as a subprocess)
+go run github.com/onsi/ginkgo/v2/ginkgo -r --junit-report=junit.xml --output-dir=test-results
 ```
 
 - **Unit** — `teo_test.go` (library round-trips), `convert/convert_test.go`
@@ -101,10 +122,5 @@ go test ./e2e      # e2e only (builds the binary, drives it as a subprocess)
 - **Integration** — `internal/cli/cli_test.go` exercises the CLI in-process.
 - **E2E** — `e2e/e2e_test.go` builds the real binary and drives it over
   argv/stdin/exit-codes, including `convert | validate`.
-
-## Consumers
-
-The [agentic-harness](https://github.com/Cloud-Byte-Consulting/agentic-harness)
-`air` CLI imports this module for its `--teo` output via a normal versioned
-require on `github.com/cloud-byte-consulting/teo` (see its `go.mod`). No
-`replace` directive is needed.
+- **CI** — `.gitea/workflows/test.yml` runs the Ginkgo suite and uploads
+  `test-results/junit.xml` as the `junit-test-results` artifact in Gitea.
