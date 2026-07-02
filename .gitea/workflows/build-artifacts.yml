@@ -1,0 +1,74 @@
+name: build-artifacts
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            artifact: teo-linux-amd64
+            archive: teo-linux-amd64.tar.gz
+            extension: ""
+          - goos: linux
+            goarch: arm64
+            artifact: teo-linux-arm64
+            archive: teo-linux-arm64.tar.gz
+            extension: ""
+          - goos: darwin
+            goarch: amd64
+            artifact: teo-darwin-amd64
+            archive: teo-darwin-amd64.tar.gz
+            extension: ""
+          - goos: darwin
+            goarch: arm64
+            artifact: teo-darwin-arm64
+            archive: teo-darwin-arm64.tar.gz
+            extension: ""
+          - goos: windows
+            goarch: amd64
+            artifact: teo-windows-amd64
+            archive: teo-windows-amd64.tar.gz
+            extension: .exe
+          - goos: windows
+            goarch: arm64
+            artifact: teo-windows-arm64
+            archive: teo-windows-arm64.tar.gz
+            extension: .exe
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags="-s -w" -o "dist/${{ matrix.artifact }}${{ matrix.extension }}" ./cmd/teo
+
+      - name: Package artifact
+        run: |
+          tar -C dist -czf "dist/${{ matrix.archive }}" "${{ matrix.artifact }}${{ matrix.extension }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.archive }}
+          if-no-files-found: error
