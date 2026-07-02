@@ -34,10 +34,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
-	yaml "go.yaml.in/yaml/v3"
 	"github.com/cloud-byte-consulting/teo"
+	yaml "go.yaml.in/yaml/v3"
 )
 
 // Options configures conversion.
@@ -228,9 +229,7 @@ func sortedKeys(m map[string]any) []string {
 	for k := range m {
 		out = append(out, k)
 	}
-	// simple insertion sort to avoid pulling in "sort" for tiny maps is
-	// unnecessary; use the stdlib for clarity.
-	sortStrings(out)
+	sort.Strings(out)
 	return out
 }
 
