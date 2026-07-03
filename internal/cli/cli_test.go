@@ -131,8 +131,52 @@ func TestHookInstallWritesProjectFile(t *testing.T) {
 	has(t, string(data), `"teo-post-tool"`)
 
 	code, _, errOut = runCLI("", "hook", "install", "--provider", "codex")
-	eq(t, code, 1)
-	has(t, errOut, "file exists")
+	eq(t, code, 0, errOut)
+	data, err = os.ReadFile(filepath.Join(tmp, ".codex", "hooks.json"))
+	noerr(t, err)
+	eq(t, strings.Count(string(data), "teo hook run --provider codex"), 1)
+}
+
+func TestHookInstallMergesExistingJSON(t *testing.T) {
+	oldwd, err := os.Getwd()
+	noerr(t, err)
+	tmp := t.TempDir()
+	noerr(t, os.Chdir(tmp))
+	defer func() { noerr(t, os.Chdir(oldwd)) }()
+
+	noerr(t, os.MkdirAll(filepath.Join(tmp, ".codex"), 0o755))
+	existing := `{
+		"hooks": {
+			"PostToolUse": [{
+				"matcher": "Bash",
+				"hooks": [{"type": "command", "command": "echo keep", "timeout": 5}]
+			}]
+		},
+		"other": true
+	}`
+	noerr(t, os.WriteFile(filepath.Join(tmp, ".codex", "hooks.json"), []byte(existing), 0o644))
+
+	code, _, errOut := runCLI("", "hook", "install", "--provider", "codex")
+	eq(t, code, 0, errOut)
+
+	data, err := os.ReadFile(filepath.Join(tmp, ".codex", "hooks.json"))
+	noerr(t, err)
+	text := string(data)
+	has(t, text, "echo keep")
+	has(t, text, "teo hook run --provider codex")
+	eq(t, strings.Count(text, "teo hook run --provider codex"), 1)
+
+	var got map[string]any
+	noerr(t, json.Unmarshal(data, &got))
+	eq(t, got["other"], true)
+	post := got["hooks"].(map[string]any)["PostToolUse"].([]any)
+	eq(t, len(post), 2)
+
+	code, _, errOut = runCLI("", "hook", "install", "--provider", "codex")
+	eq(t, code, 0, errOut)
+	data, err = os.ReadFile(filepath.Join(tmp, ".codex", "hooks.json"))
+	noerr(t, err)
+	eq(t, strings.Count(string(data), "teo hook run --provider codex"), 1)
 }
 
 func TestHookInstallHelpListsProviderCommands(t *testing.T) {

@@ -18,8 +18,8 @@
 //     cells are JSON-encoded.
 //   - array of scalars/mixed → block `key[n]{value}` with one column.
 //   - object whose values are all scalars → record.
-//   - object with nested objects/arrays → JSON-encoded onto a single scalar
-//     line (depth beyond what TEO models is preserved losslessly as JSON text).
+//   - object with nested objects/arrays → scalar fields emitted as a record;
+//     nested fields emitted as prefixed records/blocks.
 //   - CSV/TSV → one block named by Options.RootName ("items"), using the first
 //     row as headers unless Options.NoHeader is true.
 //
@@ -332,19 +332,40 @@ func FromValue(v any, o *Options) (*teo.Document, error) {
 // sorted order for deterministic output.
 func emitObject(d *teo.Document, m map[string]any) {
 	for _, k := range sortedKeys(m) {
-		val := m[k]
-		name := sanitizeKey(k)
-		switch t := val.(type) {
-		case []any:
-			emitArray(d, name, t)
-		case map[string]any:
-			if allScalar(t) {
-				d.Record(name, recordKVs(t)...)
-			} else {
-				d.Scalar(name, jsonString(t))
+		emitValue(d, sanitizeKey(k), m[k])
+	}
+}
+
+func emitValue(d *teo.Document, name string, val any) {
+	switch t := val.(type) {
+	case []any:
+		emitArray(d, name, t)
+	case map[string]any:
+		emitNestedObject(d, name, t)
+	default:
+		d.Scalar(name, scalarOrJSON(val))
+	}
+}
+
+func emitNestedObject(d *teo.Document, name string, m map[string]any) {
+	var kvs []teo.KV
+	for _, k := range sortedKeys(m) {
+		if isScalar(m[k]) {
+			kvs = append(kvs, teo.KV{Key: sanitizeKey(k), Value: m[k]})
+		}
+	}
+	if len(kvs) > 0 || len(m) == 0 {
+		d.Record(name, kvs...)
+	}
+	for _, k := range sortedKeys(m) {
+		if !isScalar(m[k]) {
+			childName := sanitizeKey(name + "_" + k)
+			if k == "rows" {
+				if fields := fieldsFromColdesc(m["coldesc"]); len(fields) > 0 && emitArrayWithFields(d, childName, m[k], fields) {
+					continue
+				}
 			}
-		default:
-			d.Scalar(name, scalarOrJSON(val))
+			emitValue(d, childName, m[k])
 		}
 	}
 }
@@ -354,23 +375,7 @@ func emitObject(d *teo.Document, m map[string]any) {
 // a single-column "value" block.
 func emitArray(d *teo.Document, name string, arr []any) {
 	if objs, ok := allObjects(arr); ok {
-		fields := unionKeys(objs) // original keys, used for map lookup
-		headers := make([]string, len(fields))
-		for i, f := range fields {
-			headers[i] = sanitizeField(f)
-		}
-		bh := d.Block(name, headers...)
-		for _, obj := range objs {
-			row := make([]any, len(fields))
-			for i, f := range fields {
-				if cell, present := obj[f]; present {
-					row[i] = scalarOrJSON(cell)
-				} else {
-					row[i] = nil
-				}
-			}
-			bh.Row(row...)
-		}
+		emitObjectBlock(d, name, objs, unionKeys(objs))
 		return
 	}
 	bh := d.Block(name, "value")
@@ -379,13 +384,71 @@ func emitArray(d *teo.Document, name string, arr []any) {
 	}
 }
 
-func recordKVs(m map[string]any) []teo.KV {
-	keys := sortedKeys(m)
-	kvs := make([]teo.KV, 0, len(keys))
-	for _, k := range keys {
-		kvs = append(kvs, teo.KV{Key: sanitizeKey(k), Value: m[k]})
+func emitArrayWithFields(d *teo.Document, name string, arr any, fields []string) bool {
+	items, ok := arr.([]any)
+	if !ok {
+		return false
 	}
-	return kvs
+	objs, ok := allObjects(items)
+	if !ok {
+		return false
+	}
+	emitObjectBlock(d, name, objs, appendMissingFields(fields, objs))
+	return true
+}
+
+func emitObjectBlock(d *teo.Document, name string, objs []map[string]any, fields []string) {
+	headers := make([]string, len(fields))
+	for i, f := range fields {
+		headers[i] = sanitizeField(f)
+	}
+	bh := d.Block(name, headers...)
+	for _, obj := range objs {
+		row := make([]any, len(fields))
+		for i, f := range fields {
+			if cell, present := obj[f]; present {
+				row[i] = scalarOrJSON(cell)
+			} else {
+				row[i] = nil
+			}
+		}
+		bh.Row(row...)
+	}
+}
+
+func fieldsFromColdesc(v any) []string {
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, el := range arr {
+		m, ok := el.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, ok := m["name"].(string)
+		if ok && strings.TrimSpace(name) != "" && !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+func appendMissingFields(fields []string, objs []map[string]any) []string {
+	seen := map[string]bool{}
+	out := append([]string(nil), fields...)
+	for _, f := range out {
+		seen[f] = true
+	}
+	for _, f := range unionKeys(objs) {
+		if !seen[f] {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // ----- value classification ------------------------------------------------------
@@ -397,15 +460,6 @@ func isScalar(v any) bool {
 	default:
 		return false
 	}
-}
-
-func allScalar(m map[string]any) bool {
-	for _, v := range m {
-		if !isScalar(v) {
-			return false
-		}
-	}
-	return true
 }
 
 // allObjects reports whether arr is non-empty and every element is an object,
@@ -485,11 +539,15 @@ func sanitizeField(f string) string {
 // `[a-z][a-z0-9_]*`.
 func sanitizeKey(k string) string {
 	var b []rune
-	for _, r := range k {
+	runes := []rune(k)
+	for i, r := range runes {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_':
 			b = append(b, r)
 		case r >= 'A' && r <= 'Z':
+			if len(b) > 0 && b[len(b)-1] != '_' && (isLowerOrDigit(runes[i-1]) || (isUpper(runes[i-1]) && i+1 < len(runes) && isLower(runes[i+1]))) {
+				b = append(b, '_')
+			}
 			b = append(b, r+('a'-'A'))
 		default:
 			b = append(b, '_')
@@ -504,4 +562,12 @@ func sanitizeKey(k string) string {
 		b = append([]rune{'k'}, b...)
 	}
 	return string(b)
+}
+
+func isLower(r rune) bool { return r >= 'a' && r <= 'z' }
+
+func isUpper(r rune) bool { return r >= 'A' && r <= 'Z' }
+
+func isLowerOrDigit(r rune) bool {
+	return isLower(r) || (r >= '0' && r <= '9')
 }

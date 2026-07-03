@@ -1,6 +1,7 @@
 package convert_test
 
 import (
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -63,18 +64,52 @@ func TestFromJSONNestedScalarObject(t *testing.T) {
 	has(t, out, "  owner: alice")
 }
 
-func TestFromJSONNestedObjectAsScalar(t *testing.T) {
+func TestFromJSONNestedObjectFlattened(t *testing.T) {
 	doc, err := convert.FromJSON([]byte(`{"cfg":{"db":{"host":"h"}}}`), nil)
 	noerr(t, err)
-	has(t, valid(t, doc), `cfg: "{\"db\":{\"host\":\"h\"}}"`)
+	out := valid(t, doc)
+	has(t, out, "cfg_db:\n")
+	has(t, out, "  host: h")
+}
+
+func TestFromJSONSampleRowset(t *testing.T) {
+	data, err := os.ReadFile("../testdata/sample.json")
+	noerr(t, err)
+	doc, err := convert.FromJSON(data, nil)
+	noerr(t, err)
+	out := valid(t, doc)
+	eq(t, out, `rowset:
+  affected_rows: 13
+  dbname: alerts
+  osname: NCOMS
+  tblname: status
+rowset_coldesc[11]{name,size,type}:
+  Identifier,255,string
+  Serial,4,integer
+  Node,64,string
+  NodeAlias,64,string
+  AlertKey,255,string
+  Severity,4,integer
+  Summary,255,string
+  StateChange,4,utc
+  FirstOccurrence,4,utc
+  LastOccurrence,4,utc
+  RowSerial,4,integer
+rowset_rows[3]{Identifier,Serial,Node,NodeAlias,AlertKey,Severity,Summary,StateChange,FirstOccurrence,LastOccurrence,RowSerial}:
+  Startup@sol9-build1,12469,sol9-build1,"","",0,ObjectServer NCOMS on sol9-build1 started at Wed Jul 04 15:27:57 2012,1341412082,1341411978,1341412077,12469
+  ProfilerEnableToggle@NCOMS:sol9-build1,12468,sol9-build1,"","",0,ObjectServer NCOMS Profiler enabled at Wed Jul 04 15:27:56 2012,1341412077,1341411976,1341412076,12468
+  Shutdown@sol9-build1,null,null,null,null,null,null,null,null,null,12519
+`)
 }
 
 func TestFromJSONSanitizesKeys(t *testing.T) {
-	doc, err := convert.FromJSON([]byte(`{"First-Name":"a","2nd":"b"}`), nil)
+	doc, err := convert.FromJSON([]byte(`{"First-Name":"a","2nd":"b","affectedRows":3,"URLValue":4}`), nil)
 	noerr(t, err)
 	out := valid(t, doc)
 	has(t, out, "first_name: a")
 	has(t, out, "k2nd: b")
+	has(t, out, "affected_rows: 3")
+	has(t, out, "url_value: 4")
 }
 
 func TestFromJSONRootScalar(t *testing.T) {
