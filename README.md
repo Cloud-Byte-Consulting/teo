@@ -114,7 +114,6 @@ to content sniffing for stdin. Ambiguous stdin can always be pinned with
 ```sh
 go test ./...      # unit + integration + e2e
 go test ./e2e      # e2e only (builds the binary, drives it as a subprocess)
-go run github.com/onsi/ginkgo/v2/ginkgo -r --junit-report=junit.xml --output-dir=test-results
 ```
 
 - **Unit** — `teo_test.go` (library round-trips), `convert/convert_test.go`
@@ -122,5 +121,4 @@ go run github.com/onsi/ginkgo/v2/ginkgo -r --junit-report=junit.xml --output-dir
 - **Integration** — `internal/cli/cli_test.go` exercises the CLI in-process.
 - **E2E** — `e2e/e2e_test.go` builds the real binary and drives it over
   argv/stdin/exit-codes, including `convert | validate`.
-- **CI** — `.gitea/workflows/test.yml` runs the Ginkgo suite and uploads
-  `test-results/junit.xml` as the `junit-test-results` artifact in Gitea.
+- **CI** — `.gitea/workflows/test.yml` runs `go test ./...`.

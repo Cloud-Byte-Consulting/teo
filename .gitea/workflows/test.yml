@@ -17,15 +17,5 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Run tests with JUnit output
-        run: |
-          mkdir -p test-results
-          go run github.com/onsi/ginkgo/v2/ginkgo -r --junit-report=junit.xml --output-dir=test-results
-
-      - name: Upload JUnit report
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: junit-test-results
-          path: test-results/junit.xml
-          if-no-files-found: error
+      - name: Run tests
+        run: go test ./...
