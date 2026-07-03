@@ -94,6 +94,8 @@ set `Options.NoHeader` or pass `--no-header` in the CLI to generate `col1`,
 ```
 teo convert [--from auto|json|yaml|jsonc|csv|tsv|ndjson|jsonl] [--name NAME] [--no-header] [file]
 teo validate [file]   # well-formedness check
+teo hook install [--provider claude|codex|copilot|gemini|opencode|cursor|all]
+teo hook run --provider claude|codex|copilot|gemini|opencode|cursor
 teo version
 ```
 
@@ -108,6 +110,19 @@ echo '{"svc":"api","replicas":3}' | teo convert
 `--from auto` (default) picks the format from the file extension. Stdin is
 sniffed for JSON and NDJSON, then treated as YAML; use `--from csv` or
 `--from tsv` for delimited stdin.
+
+## Agent Hooks
+
+TEO can install post-tool hooks for Claude Code, Codex, GitHub Copilot CLI,
+Gemini CLI, OpenCode CLI, and Cursor. The hook converts large structured tool
+output to TEO before the next model call when doing so makes the output smaller.
+
+```sh
+teo hook install --provider all
+```
+
+See [`docs/hooks.md`](docs/hooks.md) for provider paths, caveats, and manual
+setup details.
 
 ## Tests
 

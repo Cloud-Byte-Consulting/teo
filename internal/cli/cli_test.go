@@ -2,6 +2,8 @@ package cli_test
 
 import (
 	"bytes"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -102,6 +104,66 @@ func TestValidate(t *testing.T) {
 	code, _, errOut = runCLI("this is not teo\n", "validate")
 	eq(t, code, 1)
 	has(t, errOut, "invalid TEO")
+}
+
+func TestHookInstallWritesProjectFile(t *testing.T) {
+	oldwd, err := os.Getwd()
+	noerr(t, err)
+	tmp := t.TempDir()
+	noerr(t, os.Chdir(tmp))
+	defer func() { noerr(t, os.Chdir(oldwd)) }()
+
+	code, out, errOut := runCLI("", "hook", "install", "--provider", "codex")
+	eq(t, code, 0, errOut)
+	has(t, out, filepath.Join(".codex", "hooks.json"))
+
+	data, err := os.ReadFile(filepath.Join(tmp, ".codex", "hooks.json"))
+	noerr(t, err)
+	has(t, string(data), "PostToolUse")
+	has(t, string(data), "teo hook run --provider codex")
+
+	code, _, errOut = runCLI("", "hook", "install", "--provider", "gemini")
+	eq(t, code, 0, errOut)
+	data, err = os.ReadFile(filepath.Join(tmp, ".gemini", "settings.json"))
+	noerr(t, err)
+	has(t, string(data), `"AfterTool"`)
+	has(t, string(data), `"hooks"`)
+	has(t, string(data), `"teo-post-tool"`)
+
+	code, _, errOut = runCLI("", "hook", "install", "--provider", "codex")
+	eq(t, code, 1)
+	has(t, errOut, "file exists")
+}
+
+func TestHookRunCopilotCompactsToolResult(t *testing.T) {
+	input := `{
+		"hook_event_name": "PostToolUse",
+		"tool_result": {
+			"result_type": "success",
+			"text_result_for_llm": "[{\"name\":\"api\",\"replicas\":3},{\"name\":\"worker\",\"replicas\":1}]"
+		}
+	}`
+	code, out, errOut := runCLI(input, "hook", "run", "--provider", "copilot", "--min-bytes", "1")
+	eq(t, code, 0, errOut)
+
+	var resp map[string]any
+	noerr(t, json.Unmarshal([]byte(out), &resp))
+	modified, ok := resp["modifiedResult"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing modifiedResult in %s", out)
+	}
+	text, ok := modified["textResultForLlm"].(string)
+	if !ok {
+		t.Fatalf("missing textResultForLlm in %s", out)
+	}
+	has(t, text, "items[2]{name,replicas}:")
+}
+
+func TestHookRunLeavesUnstructuredOutputAlone(t *testing.T) {
+	input := `{"tool_response":{"stdout":"plain log line\nanother line"}}`
+	code, out, errOut := runCLI(input, "hook", "run", "--provider", "claude", "--min-bytes", "1")
+	eq(t, code, 0, errOut)
+	eq(t, strings.TrimSpace(out), "{}")
 }
 
 func TestDispatch(t *testing.T) {

@@ -25,6 +25,9 @@ usage:
   teo convert [--from auto|json|yaml|jsonc|csv|tsv|ndjson|jsonl] [--name NAME] [--no-header] [file]
                                                               convert standard input formats to TEO (stdin if no file)
   teo validate [file]                                         validate that input is well-formed TEO (stdin if no file)
+  teo hook install [--provider PROVIDER|all] [--scope project|user] [--force]
+                                                              install post-tool hooks for AI coding tools
+  teo hook run --provider PROVIDER [--min-bytes N]            convert hook tool output to smaller TEO when possible
   teo version                                                 print version
 `
 
@@ -40,6 +43,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runConvert(args[1:], stdin, stdout, stderr)
 	case "validate":
 		return runValidate(args[1:], stdin, stdout, stderr)
+	case "hook":
+		return runHook(args[1:], stdin, stdout, stderr)
 	case "version":
 		fmt.Fprintln(stdout, Version)
 		return 0
