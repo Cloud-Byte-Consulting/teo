@@ -1,0 +1,7 @@
+{
+  // JSONC permits comments and trailing commas.
+  "services": [
+    {"name": "api", "replicas": 3,},
+    {"name": "worker", "replicas": 1,},
+  ],
+}

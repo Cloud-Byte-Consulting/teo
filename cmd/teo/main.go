@@ -1,4 +1,4 @@
-// Command teo converts JSON/YAML to Token-Efficient Output and validates TEO.
+// Command teo converts standard data formats to Token-Efficient Output and validates TEO.
 package main
 
 import (

@@ -3,9 +3,9 @@ package teo_test
 import (
 	"strings"
 
+	"github.com/cloud-byte-consulting/teo"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/cloud-byte-consulting/teo"
 )
 
 var _ = Describe("TEO", func() {
@@ -55,7 +55,7 @@ var _ = Describe("TEO", func() {
 				Row(42, "Fix login bug", "open", "alice").
 				Row(43, "Add dark mode, finally", "open", "bob").
 				Row(44, "Crash on empty input", "open", nil)
-			doc.Help("Run `air issue view <number> --teo`")
+			doc.Help("Run `teo convert issues.json`")
 
 			out := doc.String()
 			Expect(out).To(ContainSubstring("issues[3]{number,title,state,author}:"))
@@ -131,12 +131,12 @@ var _ = Describe("TEO", func() {
 
 	Describe("help block", func() {
 		It("round-trips suggestion lines verbatim", func() {
-			doc := teo.New().Help("Run `air status --teo`", "Run `air install --teo`")
+			doc := teo.New().Help("Run `teo convert data.json`", "Run `teo validate output.teo`")
 			parsed, err := teo.Parse(doc.String())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(parsed.Items).To(HaveLen(1))
 			Expect(parsed.Items[0].Help).To(HaveLen(2))
-			Expect(strings.Contains(parsed.Items[0].Help[0], "air status --teo")).To(BeTrue())
+			Expect(strings.Contains(parsed.Items[0].Help[0], "teo convert")).To(BeTrue())
 		})
 	})
 })
