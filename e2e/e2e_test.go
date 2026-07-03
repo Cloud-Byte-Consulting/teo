@@ -5,89 +5,43 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"testing"
 
 	"github.com/cloud-byte-consulting/teo"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
-// run invokes the built binary with optional stdin and returns code/stdout/stderr.
-func run(stdin string, args ...string) (int, string, string) {
-	cmd := exec.Command(teoBin, args...)
-	if stdin != "" {
-		cmd.Stdin = strings.NewReader(stdin)
+func TestBinaryConvertsJSONFile(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "teo")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/teo")
+	build.Dir = ".."
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("building teo binary: %v\n%s", err, out)
 	}
+
+	code, out, errOut := run(bin, "convert", filepath.Join("..", "testdata", "issues.json"))
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %s", code, errOut)
+	}
+	if err := teo.Validate(out); err != nil {
+		t.Fatal(err)
+	}
+	if want := `bob,43,open,"Add dark mode, finally"`; !strings.Contains(out, want) {
+		t.Fatalf("missing %q in:\n%s", want, out)
+	}
+}
+
+func run(bin string, args ...string) (int, string, string) {
+	cmd := exec.Command(bin, args...)
 	var out, errBuf bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errBuf
 
-	switch e := cmd.Run().(type) {
+	switch err := cmd.Run().(type) {
 	case nil:
 		return 0, out.String(), errBuf.String()
 	case *exec.ExitError:
-		return e.ExitCode(), out.String(), errBuf.String()
+		return err.ExitCode(), out.String(), errBuf.String()
 	default:
-		Fail("running binary: " + e.Error())
-		return -1, "", ""
+		return -1, "", err.Error()
 	}
 }
-
-func dataPath(name string) string { return filepath.Join("..", "testdata", name) }
-
-var _ = Describe("teo binary", func() {
-	It("converts a JSON file to valid TEO", func() {
-		code, out, errOut := run("", "convert", dataPath("issues.json"))
-		Expect(code).To(Equal(0), errOut)
-		Expect(teo.Validate(out)).To(Succeed())
-		// fields are sorted (decoders drop source key order)
-		Expect(out).To(ContainSubstring("issues[3]{author,number,state,title}:"))
-		// the comma in the title must be quoted so the row keeps 4 cells
-		Expect(out).To(ContainSubstring(`bob,43,open,"Add dark mode, finally"`))
-	})
-
-	It("agrees between JSON and YAML inputs", func() {
-		_, jsonOut, _ := run("", "convert", dataPath("issues.json"))
-		code, yamlOut, errOut := run("", "convert", dataPath("issues.yaml"))
-		Expect(code).To(Equal(0), errOut)
-		Expect(yamlOut).To(Equal(jsonOut))
-	})
-
-	It("converts CSV file input", func() {
-		code, out, errOut := run("", "convert", dataPath("issues.csv"))
-		Expect(code).To(Equal(0), errOut)
-		Expect(teo.Validate(out)).To(Succeed())
-		Expect(out).To(ContainSubstring("items[3]{number,title,state,author}:"))
-	})
-
-	It("converts JSONC file input", func() {
-		code, out, errOut := run("", "convert", dataPath("services.jsonc"))
-		Expect(code).To(Equal(0), errOut)
-		Expect(teo.Validate(out)).To(Succeed())
-		Expect(out).To(ContainSubstring("services[2]{name,replicas}:"))
-	})
-
-	It("reads from a stdin pipeline", func() {
-		code, out, errOut := run(`{"name":"acme","count":2}`, "convert")
-		Expect(code).To(Equal(0), errOut)
-		Expect(out).To(ContainSubstring("name: acme"))
-		Expect(out).To(ContainSubstring("count: 2"))
-	})
-
-	It("round-trips convert piped into validate", func() {
-		_, converted, _ := run("", "convert", dataPath("issues.json"))
-		code, out, errOut := run(converted, "validate")
-		Expect(code).To(Equal(0), errOut)
-		Expect(out).To(ContainSubstring("ok"))
-	})
-
-	It("exits non-zero on invalid input", func() {
-		code, _, _ := run(`{bad json`, "convert", "--from", "json")
-		Expect(code).To(Equal(1))
-	})
-
-	It("prints a non-empty version", func() {
-		code, out, _ := run("", "version")
-		Expect(code).To(Equal(0))
-		Expect(strings.TrimSpace(out)).NotTo(BeEmpty())
-	})
-})

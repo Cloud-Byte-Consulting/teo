@@ -4,8 +4,6 @@
 package cli
 
 import (
-	"bytes"
-	"encoding/csv"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -172,12 +170,6 @@ func resolveFormat(from, path string, data []byte) (string, error) {
 			}
 			break
 		}
-		if looksDelimited(data, '\t') {
-			return "tsv", nil
-		}
-		if looksDelimited(data, ',') {
-			return "csv", nil
-		}
 		return "yaml", nil
 	default:
 		return "", fmt.Errorf("unknown --from %q (want auto|json|yaml|jsonc|csv|tsv|ndjson|jsonl)", from)
@@ -201,11 +193,4 @@ func looksLikeJSONLines(data []byte) bool {
 		}
 	}
 	return nonblank > 1
-}
-
-func looksDelimited(data []byte, comma rune) bool {
-	r := csv.NewReader(bytes.NewReader(data))
-	r.Comma = comma
-	records, err := r.ReadAll()
-	return err == nil && len(records) > 1 && len(records[0]) > 1
 }

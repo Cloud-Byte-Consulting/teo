@@ -3,10 +3,7 @@ package convert
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 )
-
-func sortStrings(s []string) { sort.Strings(s) }
 
 // normalize coerces decoder-specific number/map representations into the small
 // set TEO understands: int, float64, bool, string, nil, map[string]any, []any.
