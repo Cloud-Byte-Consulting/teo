@@ -105,9 +105,9 @@ teo convert --from csv --no-header --name rows < data.txt
 echo '{"svc":"api","replicas":3}' | teo convert
 ```
 
-`--from auto` (default) picks the format from the file extension, falling back
-to content sniffing for stdin. Ambiguous stdin can always be pinned with
-`--from`.
+`--from auto` (default) picks the format from the file extension. Stdin is
+sniffed for JSON and NDJSON, then treated as YAML; use `--from csv` or
+`--from tsv` for delimited stdin.
 
 ## Tests
 
