@@ -68,16 +68,16 @@ Supported input formats:
 **Projection policy** (TEO is two-level, so arbitrary input is mapped
 deterministically):
 
-| Input shape                         | TEO output                                   |
-|-------------------------------------|----------------------------------------------|
-| scalar value                        | `key: value`                                 |
-| array of objects                    | block keyed by the union of keys (sorted)    |
-| array of scalars / mixed            | single-column block `key[n]{value}`          |
-| object of all-scalar fields         | record (`key:` + indented fields)            |
-| object containing objects/arrays    | JSON-encoded onto one scalar line (lossless) |
-| NDJSON / JSON Lines                 | root block from one JSON value per line      |
-| CSV / TSV with headers              | one block using the first row as fields      |
-| CSV / TSV without headers           | one block using `col1`, `col2`, etc.         |
+| Input shape                      | TEO output                                      |
+|----------------------------------|-------------------------------------------------|
+| scalar value                     | `key: value`                                    |
+| array of objects                 | block keyed by the union of keys (sorted)       |
+| array of scalars / mixed         | single-column block `key[n]{value}`             |
+| object of all-scalar fields      | record (`key:` + indented fields)               |
+| object containing objects/arrays | scalar record plus prefixed child records/blocks |
+| NDJSON / JSON Lines              | root block from one JSON value per line         |
+| CSV / TSV with headers           | one block using the first row as fields         |
+| CSV / TSV without headers        | one block using `col1`, `col2`, etc.            |
 
 Object/record/block **names** are sanitized to the key grammar
 `[a-z][a-z0-9_]*` (lowercased; non-conforming runes → `_`; a `k` is prefixed

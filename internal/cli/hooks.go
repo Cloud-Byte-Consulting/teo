@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/cloud-byte-consulting/teo"
@@ -33,7 +34,7 @@ usage:
 
 flags:
   --scope project|user   install in this project or user config (default project)
-  --force                replace an existing hook file
+  --force                replace instead of merging an existing hook file
 `
 
 var hookProviders = []string{"claude", "codex", "copilot", "gemini", "opencode", "cursor"}
@@ -67,7 +68,7 @@ func runHookInstall(args []string, stdout, stderr io.Writer) int {
 	fs.Usage = func() { fmt.Fprint(stderr, hookInstallUsage) }
 	provider := fs.String("provider", "all", "provider to install, or all")
 	scope := fs.String("scope", "project", "install scope: project|user")
-	force := fs.Bool("force", false, "overwrite an existing hook file")
+	force := fs.Bool("force", false, "replace instead of merging an existing hook file")
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
 			return 0
@@ -197,17 +198,77 @@ func hookInstallPath(provider, scope string) (string, error) {
 }
 
 func writeHookFile(path string, content []byte, force bool) error {
-	if !force {
-		if _, err := os.Stat(path); err == nil {
-			return fmt.Errorf("file exists; pass --force to replace it")
-		} else if !os.IsNotExist(err) {
-			return err
-		}
-	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, content, 0o644)
+	if force {
+		return os.WriteFile(path, content, 0o644)
+	}
+	existing, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return os.WriteFile(path, content, 0o644)
+	}
+	if err != nil {
+		return err
+	}
+	merged, ok, err := mergeHookJSON(existing, content)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("file exists; pass --force to replace it")
+	}
+	return os.WriteFile(path, prettyJSON(merged), 0o644)
+}
+
+func mergeHookJSON(existing, incoming []byte) (any, bool, error) {
+	var dst, src any
+	if err := json.Unmarshal(incoming, &src); err != nil {
+		return nil, false, nil
+	}
+	if err := json.Unmarshal(existing, &dst); err != nil {
+		return nil, false, fmt.Errorf("file exists with invalid JSON; pass --force to replace it")
+	}
+	return mergeJSONValue(dst, src), true, nil
+}
+
+func mergeJSONValue(dst, src any) any {
+	if dst == nil {
+		return src
+	}
+	switch d := dst.(type) {
+	case map[string]any:
+		s, ok := src.(map[string]any)
+		if !ok {
+			return dst
+		}
+		for k, v := range s {
+			d[k] = mergeJSONValue(d[k], v)
+		}
+		return d
+	case []any:
+		s, ok := src.([]any)
+		if !ok {
+			return dst
+		}
+		for _, v := range s {
+			if !jsonArrayContains(d, v) {
+				d = append(d, v)
+			}
+		}
+		return d
+	default:
+		return dst
+	}
+}
+
+func jsonArrayContains(items []any, want any) bool {
+	for _, item := range items {
+		if reflect.DeepEqual(item, want) {
+			return true
+		}
+	}
+	return false
 }
 
 func hookInstallContent(provider string) []byte {

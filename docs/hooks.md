@@ -40,8 +40,9 @@ a user-level install where the provider supports user hook files:
 teo hook install --provider codex --scope user
 ```
 
-Existing files are not overwritten. Pass `--force` only when you have checked
-the current hook file and want TEO to replace it.
+Existing JSON hook files are amended in place: current settings stay, and the
+TEO hook is appended only if missing. Non-JSON hook files are left untouched
+unless `--force` is passed.
 
 ## Installed Files
 
