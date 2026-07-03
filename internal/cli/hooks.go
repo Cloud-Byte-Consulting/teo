@@ -20,6 +20,22 @@ usage:
   teo hook run --provider claude|codex|copilot|gemini|opencode|cursor [--min-bytes N]
 `
 
+const hookInstallUsage = `teo hook install installs post-tool hooks
+
+usage:
+  teo hook install --provider all
+  teo hook install --provider claude
+  teo hook install --provider codex
+  teo hook install --provider copilot
+  teo hook install --provider gemini
+  teo hook install --provider opencode
+  teo hook install --provider cursor
+
+flags:
+  --scope project|user   install in this project or user config (default project)
+  --force                replace an existing hook file
+`
+
 var hookProviders = []string{"claude", "codex", "copilot", "gemini", "opencode", "cursor"}
 
 func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -42,12 +58,20 @@ func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 }
 
 func runHookInstall(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help") {
+		fmt.Fprint(stdout, hookInstallUsage)
+		return 0
+	}
 	fs := flag.NewFlagSet("hook install", flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	fs.Usage = func() { fmt.Fprint(stderr, hookInstallUsage) }
 	provider := fs.String("provider", "all", "provider to install, or all")
 	scope := fs.String("scope", "project", "install scope: project|user")
 	force := fs.Bool("force", false, "overwrite an existing hook file")
 	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
 		return 2
 	}
 	if fs.NArg() > 0 && *provider == "all" {
