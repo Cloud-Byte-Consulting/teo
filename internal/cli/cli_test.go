@@ -135,6 +135,17 @@ func TestHookInstallWritesProjectFile(t *testing.T) {
 	has(t, errOut, "file exists")
 }
 
+func TestHookInstallHelpListsProviderCommands(t *testing.T) {
+	code, out, errOut := runCLI("", "hook", "install", "--help")
+	eq(t, code, 0, errOut)
+	has(t, out, "teo hook install --provider claude")
+	has(t, out, "teo hook install --provider codex")
+	has(t, out, "teo hook install --provider copilot")
+	has(t, out, "teo hook install --provider gemini")
+	has(t, out, "teo hook install --provider opencode")
+	has(t, out, "teo hook install --provider cursor")
+}
+
 func TestHookRunCopilotCompactsToolResult(t *testing.T) {
 	input := `{
 		"hook_event_name": "PostToolUse",
