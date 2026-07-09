@@ -11,35 +11,23 @@ import (
 
 	"github.com/cloud-byte-consulting/teo"
 	"github.com/cloud-byte-consulting/teo/internal/cli"
+	"github.com/cloud-byte-consulting/teo/internal/tokencount"
 )
 
 func TestConvertJSONFile(t *testing.T) {
-	code, out, errOut := runCLI("", "convert", dataPath("issues.json"))
+	code, out, errOut := runCLI("", "convert", dataPath("schema_misc_examples.json"))
 	eq(t, code, 0, errOut)
 	noerr(t, teo.Validate(out))
-	has(t, out, "issues[3]{author,number,state,title}:")
+	has(t, out, "vegetables[3]{veggieLike,veggieName}:")
+	has(t, out, "person_address:")
+	has(t, out, "false,broccoli")
 }
 
 func TestConvertJSONAndYAMLMatch(t *testing.T) {
-	_, jsonOut, _ := runCLI("", "convert", dataPath("issues.json"))
-	code, yamlOut, errOut := runCLI("", "convert", dataPath("issues.yaml"))
+	_, jsonOut, _ := runCLI("", "convert", dataPath("schema_misc_examples.json"))
+	code, yamlOut, errOut := runCLI("", "convert", dataPath("schema_misc_examples.yaml"))
 	eq(t, code, 0, errOut)
 	eq(t, yamlOut, jsonOut)
-}
-
-func TestConvertTabularFiles(t *testing.T) {
-	code, out, errOut := runCLI("", "convert", dataPath("issues.csv"))
-	eq(t, code, 0, errOut)
-	noerr(t, teo.Validate(out))
-	has(t, out, "items[3]{number,title,state,author}:")
-	parsed, err := teo.Parse(out)
-	noerr(t, err)
-	eq(t, parsed.FindBlock("items").Rows[0], []any{"42", "Fix login bug", "open", "alice"})
-
-	code, out, errOut = runCLI("", "convert", dataPath("issues.tsv"))
-	eq(t, code, 0, errOut)
-	noerr(t, teo.Validate(out))
-	has(t, out, "items[3]{number,title,state,author}:")
 }
 
 func TestConvertJSONCAndNDJSON(t *testing.T) {
@@ -74,10 +62,6 @@ func TestConvertFlags(t *testing.T) {
 	code, out, _ := runCLI(`{"a":1}`, "convert", "--from", "json", "-")
 	eq(t, code, 0)
 	has(t, out, "a: 1")
-
-	code, out, errOut := runCLI("alice,open\nbob,closed\n", "convert", "--from", "csv", "--no-header", "--name", "rows")
-	eq(t, code, 0, errOut)
-	has(t, out, "rows[2]{col1,col2}:")
 
 	code, out, _ = runCLI(`[{"x":1}]`, "convert", "--name", "rows")
 	eq(t, code, 0)
@@ -191,14 +175,17 @@ func TestHookInstallHelpListsProviderCommands(t *testing.T) {
 }
 
 func TestHookRunCopilotCompactsToolResult(t *testing.T) {
-	input := `{
+	payload, err := os.ReadFile(dataPath("schema_misc_examples.json"))
+	noerr(t, err)
+	inputBytes, err := json.Marshal(map[string]any{
 		"hook_event_name": "PostToolUse",
-		"tool_result": {
-			"result_type": "success",
-			"text_result_for_llm": "[{\"name\":\"api\",\"replicas\":3},{\"name\":\"worker\",\"replicas\":1}]"
-		}
-	}`
-	code, out, errOut := runCLI(input, "hook", "run", "--provider", "copilot", "--min-bytes", "1")
+		"tool_result": map[string]any{
+			"result_type":         "success",
+			"text_result_for_llm": strings.TrimSpace(string(payload)),
+		},
+	})
+	noerr(t, err)
+	code, out, errOut := runCLI(string(inputBytes), "hook", "run", "--provider", "copilot", "--min-bytes", "1")
 	eq(t, code, 0, errOut)
 
 	var resp map[string]any
@@ -211,7 +198,16 @@ func TestHookRunCopilotCompactsToolResult(t *testing.T) {
 	if !ok {
 		t.Fatalf("missing textResultForLlm in %s", out)
 	}
-	has(t, text, "items[2]{name,replicas}:")
+	has(t, text, "vegetables[3]{veggieLike,veggieName}:")
+	srcTok, err := tokencount.Count(strings.TrimSpace(string(payload)))
+	noerr(t, err)
+	teoTok, err := tokencount.Count(text)
+	noerr(t, err)
+	t.Logf("hook token benefit (%s): source=%d teo=%d saved=%d (%.1f%%)",
+		tokencount.Encoding, srcTok, teoTok, srcTok-teoTok, float64(srcTok-teoTok)*100/float64(srcTok))
+	if teoTok >= srcTok {
+		t.Fatalf("hook TEO tokens (%d) should be fewer than JSON (%d)", teoTok, srcTok)
+	}
 }
 
 func TestHookRunLeavesUnstructuredOutputAlone(t *testing.T) {

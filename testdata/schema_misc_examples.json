@@ -1,0 +1,45 @@
+{
+  "title": "Miscellaneous JSON Schema examples",
+  "source": "https://json-schema.org/learn/miscellaneous-examples",
+  "person": {
+    "firstName": "John",
+    "lastName": "Doe",
+    "age": 25,
+    "address": {
+      "street": "123 Main St",
+      "city": "New York",
+      "state": "NY",
+      "postalCode": "10001"
+    },
+    "hobbies": ["reading", "running"]
+  },
+  "fruits": ["apple", "orange", "pear"],
+  "vegetables": [
+    { "veggieName": "potato", "veggieLike": true },
+    { "veggieName": "broccoli", "veggieLike": false },
+    { "veggieName": "carrot", "veggieLike": true }
+  ],
+  "enumerated": {
+    "data": [1, 2, 3],
+    "note": "value must be one of 42, true, \"hello\", null, or [1,2,3]"
+  },
+  "pattern": {
+    "code": "ABC-123"
+  },
+  "dependent_required": {
+    "foo": true,
+    "bar": "Hello World"
+  },
+  "dependent_schemas": {
+    "foo": true,
+    "propertiesCount": 10
+  },
+  "conditional_membership": {
+    "isMember": true,
+    "membershipNumber": "1234567890"
+  },
+  "guest_membership": {
+    "isMember": false,
+    "membershipNumber": "GUEST1234567890"
+  }
+}

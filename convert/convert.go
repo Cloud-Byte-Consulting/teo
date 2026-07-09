@@ -20,8 +20,6 @@
 //   - object whose values are all scalars → record.
 //   - object with nested objects/arrays → scalar fields emitted as a record;
 //     nested fields emitted as prefixed records/blocks.
-//   - CSV/TSV → one block named by Options.RootName ("items"), using the first
-//     row as headers unless Options.NoHeader is true.
 //
 // Object/record/block *names* are sanitized to the TEO key grammar
 // (`[a-z][a-z0-9_]*`): lowercased, non-conforming runes replaced with `_`, and
@@ -34,7 +32,6 @@ package convert
 
 import (
 	"bytes"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -50,10 +47,6 @@ type Options struct {
 	// RootName is the block name used when the document root is an array.
 	// Defaults to "items".
 	RootName string
-
-	// NoHeader makes CSV/TSV conversion treat every row as data and generate
-	// field names col1, col2, etc. By default, the first row is used as headers.
-	NoHeader bool
 }
 
 func (o *Options) rootName() string {
@@ -109,16 +102,6 @@ func FromNDJSON(data []byte, o *Options) (*teo.Document, error) {
 // FromJSONL parses JSON Lines input. It is equivalent to FromNDJSON.
 func FromJSONL(data []byte, o *Options) (*teo.Document, error) {
 	return FromNDJSON(data, o)
-}
-
-// FromCSV parses CSV bytes and converts them to a TEO document.
-func FromCSV(data []byte, o *Options) (*teo.Document, error) {
-	return fromDelimited(data, ',', "csv", o)
-}
-
-// FromTSV parses tab-separated bytes and converts them to a TEO document.
-func FromTSV(data []byte, o *Options) (*teo.Document, error) {
-	return fromDelimited(data, '\t', "tsv", o)
 }
 
 func decodeJSON(data []byte) (any, error) {
@@ -261,55 +244,6 @@ func FromYAML(data []byte, o *Options) (*teo.Document, error) {
 		return nil, fmt.Errorf("parse yaml: %w", err)
 	}
 	return FromValue(normalize(v), o)
-}
-
-func fromDelimited(data []byte, comma rune, label string, o *Options) (*teo.Document, error) {
-	r := csv.NewReader(bytes.NewReader(data))
-	r.Comma = comma
-	records, err := r.ReadAll()
-	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", label, err)
-	}
-	if len(records) == 0 {
-		return nil, fmt.Errorf("parse %s: empty input", label)
-	}
-
-	var headers []string
-	rows := records
-	if o == nil || !o.NoHeader {
-		headers = records[0]
-		rows = records[1:]
-	} else {
-		headers = generatedFields(len(records[0]))
-	}
-
-	fields := make([]string, len(headers))
-	for i, h := range headers {
-		h = strings.TrimSpace(h)
-		if h == "" {
-			h = fmt.Sprintf("col%d", i+1)
-		}
-		fields[i] = sanitizeField(h)
-	}
-
-	d := teo.New()
-	bh := d.Block(o.rootName(), fields...)
-	for _, row := range rows {
-		vals := make([]any, len(row))
-		for i, cell := range row {
-			vals[i] = cell
-		}
-		bh.Row(vals...)
-	}
-	return d, nil
-}
-
-func generatedFields(n int) []string {
-	fields := make([]string, n)
-	for i := range fields {
-		fields[i] = fmt.Sprintf("col%d", i+1)
-	}
-	return fields
 }
 
 // FromValue converts an already-decoded value (the result of unmarshalling

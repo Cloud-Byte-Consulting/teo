@@ -52,8 +52,6 @@ doc, err := convert.FromJSON(data, nil)
 doc, err := convert.FromYAML(data, &convert.Options{RootName: "rows"})
 doc, err := convert.FromJSONC(data, nil)
 doc, err := convert.FromNDJSON(data, &convert.Options{RootName: "events"})
-doc, err := convert.FromCSV(data, &convert.Options{RootName: "rows"})
-doc, err := convert.FromTSV(data, &convert.Options{RootName: "rows", NoHeader: true})
 ```
 
 Supported input formats:
@@ -62,8 +60,6 @@ Supported input formats:
 - YAML (`.yaml`, `.yml`)
 - JSONC (`.jsonc`)
 - NDJSON / JSON Lines (`.ndjson`, `.jsonl`)
-- CSV (`.csv`)
-- TSV (`.tsv`)
 
 **Projection policy** (TEO is two-level, so arbitrary input is mapped
 deterministically):
@@ -76,23 +72,16 @@ deterministically):
 | object of all-scalar fields      | record (`key:` + indented fields)               |
 | object containing objects/arrays | scalar record plus prefixed child records/blocks |
 | NDJSON / JSON Lines              | root block from one JSON value per line         |
-| CSV / TSV with headers           | one block using the first row as fields         |
-| CSV / TSV without headers        | one block using `col1`, `col2`, etc.            |
 
 Object/record/block **names** are sanitized to the key grammar
 `[a-z][a-z0-9_]*` (lowercased; non-conforming runes → `_`; a `k` is prefixed
 when the first rune is not a letter). Source object key order is **not**
 preserved — Go map decoding drops it, so keys are emitted sorted.
 
-CSV and TSV values are preserved as strings because those formats do not carry
-native type information. By default, the first row is treated as a header row;
-set `Options.NoHeader` or pass `--no-header` in the CLI to generate `col1`,
-`col2`, etc.
-
 ## CLI (`cmd/teo`)
 
 ```
-teo convert [--from auto|json|yaml|jsonc|csv|tsv|ndjson|jsonl] [--name NAME] [--no-header] [file]
+teo convert [--from auto|json|yaml|jsonc|ndjson|jsonl] [--name NAME] [file]
 teo validate [file]   # well-formedness check
 teo hook install [--provider claude|codex|copilot|gemini|opencode|cursor|all]
 teo hook run --provider claude|codex|copilot|gemini|opencode|cursor
@@ -102,14 +91,11 @@ teo version
 ```sh
 go build ./cmd/teo
 teo convert data.json | teo validate
-teo convert data.csv --name rows
-teo convert --from csv --no-header --name rows < data.txt
 echo '{"svc":"api","replicas":3}' | teo convert
 ```
 
 `--from auto` (default) picks the format from the file extension. Stdin is
-sniffed for JSON and NDJSON, then treated as YAML; use `--from csv` or
-`--from tsv` for delimited stdin.
+sniffed for JSON and NDJSON, then treated as YAML.
 
 ## Agent Hooks
 
@@ -131,9 +117,18 @@ go test ./...      # unit + integration + e2e
 go test ./e2e      # e2e only (builds the binary, drives it as a subprocess)
 ```
 
+CI-style run with JUnit + tiktoken savings report:
+
+```sh
+mkdir -p test-results
+gotestsum --junitfile=test-results/junit.xml --format=testname -- -v ./...
+go run ./tools/embed_junit_tokens   # merges cl100k_base token metrics into junit.xml
+```
+
 - **Unit** — `teo_test.go` (library round-trips), `convert/convert_test.go`
   (projection policy; every conversion must re-parse).
 - **Integration** — `internal/cli/cli_test.go` exercises the CLI in-process.
 - **E2E** — `e2e/e2e_test.go` builds the real binary and drives it over
   argv/stdin/exit-codes, including `convert | validate`.
-- **CI** — `.gitea/workflows/test.yml` runs `go test ./...`.
+- **CI** — `.gitea/workflows/test.yml` runs `gotestsum` with JUnit output to
+  `test-results/junit.xml`, including tiktoken (`cl100k_base`) savings in test logs.

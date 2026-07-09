@@ -112,7 +112,7 @@ Never emit silent empty output. For an empty list, still emit the count and the 
 count: 0
 issues[0]{number,title,state}:
 help[1]:
-  Run `teo convert issues.csv --name issues`
+  Run `teo convert issues.json --name issues`
 ```
 Optionally add a human-meaningful `note:` line (`note: no open issues`). The point is that `count: 0` is an explicit, unambiguous signal that the query succeeded and returned nothing.
 

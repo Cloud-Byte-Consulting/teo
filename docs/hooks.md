@@ -1,7 +1,7 @@
 # Agent Hook Install
 
 TEO works best as a post-tool hook. The tool has already run, so the hook can
-replace large JSON, YAML, CSV, TSV, or NDJSON output before the next model call
+replace large JSON, YAML, or NDJSON output before the next model call
 sees it. A pre-tool hook cannot do that because no tool output exists yet.
 
 Install the CLI first:
@@ -72,7 +72,7 @@ output, and tries to convert it to TEO. It only returns a replacement when all
 of these are true:
 
 - the output is at least 512 bytes, unless `--min-bytes` is set
-- the output looks like JSON, YAML, JSONC, NDJSON, CSV, or TSV
+- the output looks like JSON, YAML, JSONC, or NDJSON
 - conversion produces valid TEO
 - the TEO text is smaller than the original output
 

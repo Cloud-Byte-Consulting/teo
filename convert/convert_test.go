@@ -72,6 +72,18 @@ func TestFromJSONNestedObjectFlattened(t *testing.T) {
 	has(t, out, "  host: h")
 }
 
+func TestFromJSONSchemaMiscExamples(t *testing.T) {
+	data, err := os.ReadFile("../testdata/schema_misc_examples.json")
+	noerr(t, err)
+	doc, err := convert.FromJSON(data, nil)
+	noerr(t, err)
+	out := valid(t, doc)
+	has(t, out, "vegetables[3]{veggieLike,veggieName}:")
+	has(t, out, "person_hobbies[2]{value}:")
+	has(t, out, "enumerated_data[3]{value}:")
+	eq(t, mustParse(t, out).FindBlock("vegetables").Rows[1], []any{false, "broccoli"})
+}
+
 func TestFromJSONSampleRowset(t *testing.T) {
 	data, err := os.ReadFile("../testdata/sample.json")
 	noerr(t, err)
@@ -169,31 +181,6 @@ func TestFromNDJSON(t *testing.T) {
 		{"api", 2},
 		{"worker", 1},
 	})
-}
-
-func TestFromCSV(t *testing.T) {
-	doc, err := convert.FromCSV([]byte("number,title\n1,Fix login bug\n2,\"Add dark mode, finally\"\n"), &convert.Options{RootName: "issues"})
-	noerr(t, err)
-	out := valid(t, doc)
-	has(t, out, "issues[2]{number,title}:")
-	eq(t, mustParse(t, out).FindBlock("issues").Rows, [][]any{
-		{"1", "Fix login bug"},
-		{"2", "Add dark mode, finally"},
-	})
-
-	doc, err = convert.FromCSV([]byte("alice,open\nbob,closed\n"), &convert.Options{RootName: "rows", NoHeader: true})
-	noerr(t, err)
-	out = valid(t, doc)
-	has(t, out, "rows[2]{col1,col2}:")
-	eq(t, mustParse(t, out).FindBlock("rows").Rows[0], []any{"alice", "open"})
-}
-
-func TestFromTSV(t *testing.T) {
-	doc, err := convert.FromTSV([]byte("name\tstate\napi\topen\nworker\tclosed\n"), &convert.Options{RootName: "services"})
-	noerr(t, err)
-	out := valid(t, doc)
-	has(t, out, "services[2]{name,state}:")
-	eq(t, mustParse(t, out).FindBlock("services").Rows[1], []any{"worker", "closed"})
 }
 
 func valid(t *testing.T, doc *teo.Document) string {

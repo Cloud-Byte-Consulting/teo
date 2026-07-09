@@ -22,7 +22,7 @@ var Version = "dev"
 const usage = `teo — Token-Efficient Output toolkit
 
 usage:
-  teo convert [--from auto|json|yaml|jsonc|csv|tsv|ndjson|jsonl] [--name NAME] [--no-header] [file]
+  teo convert [--from auto|json|yaml|jsonc|ndjson|jsonl] [--name NAME] [file]
                                                               convert standard input formats to TEO (stdin if no file)
   teo validate [file]                                         validate that input is well-formed TEO (stdin if no file)
   teo hook install [--provider PROVIDER|all] [--scope project|user] [--force]
@@ -60,9 +60,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 func runConvert(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("convert", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	from := fs.String("from", "auto", "input format: auto|json|yaml|jsonc|csv|tsv|ndjson|jsonl")
+	from := fs.String("from", "auto", "input format: auto|json|yaml|jsonc|ndjson|jsonl")
 	name := fs.String("name", "items", "block name to use when the root is an array")
-	noHeader := fs.Bool("no-header", false, "treat CSV/TSV rows as data and generate col1, col2, etc.")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -79,7 +78,7 @@ func runConvert(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	opts := &convert.Options{RootName: *name, NoHeader: *noHeader}
+	opts := &convert.Options{RootName: *name}
 	var doc *teo.Document
 	switch format {
 	case "json":
@@ -88,10 +87,6 @@ func runConvert(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		doc, err = convert.FromYAML(data, opts)
 	case "jsonc":
 		doc, err = convert.FromJSONC(data, opts)
-	case "csv":
-		doc, err = convert.FromCSV(data, opts)
-	case "tsv":
-		doc, err = convert.FromTSV(data, opts)
 	case "ndjson", "jsonl":
 		doc, err = convert.FromNDJSON(data, opts)
 	}
@@ -143,7 +138,7 @@ func readInput(arg string, stdin io.Reader) (string, []byte, error) {
 // content sniffing as a last resort.
 func resolveFormat(from, path string, data []byte) (string, error) {
 	switch from {
-	case "json", "yaml", "jsonc", "csv", "tsv", "ndjson", "jsonl":
+	case "json", "yaml", "jsonc", "ndjson", "jsonl":
 		return from, nil
 	case "auto", "":
 		switch strings.ToLower(filepath.Ext(path)) {
@@ -153,10 +148,6 @@ func resolveFormat(from, path string, data []byte) (string, error) {
 			return "jsonc", nil
 		case ".yaml", ".yml":
 			return "yaml", nil
-		case ".csv":
-			return "csv", nil
-		case ".tsv":
-			return "tsv", nil
 		case ".ndjson":
 			return "ndjson", nil
 		case ".jsonl":
@@ -177,7 +168,7 @@ func resolveFormat(from, path string, data []byte) (string, error) {
 		}
 		return "yaml", nil
 	default:
-		return "", fmt.Errorf("unknown --from %q (want auto|json|yaml|jsonc|csv|tsv|ndjson|jsonl)", from)
+		return "", fmt.Errorf("unknown --from %q (want auto|json|yaml|jsonc|ndjson|jsonl)", from)
 	}
 }
 

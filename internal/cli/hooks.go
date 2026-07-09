@@ -523,12 +523,6 @@ func compactToolText(text string, minBytes int) (string, bool) {
 		{enabled: first == '{' || first == '[', convert: func(b []byte) (*teo.Document, error) {
 			return convert.FromJSONC(b, &convert.Options{RootName: "items"})
 		}},
-		{enabled: first != '{' && first != '[' && hasRowsAndDelimiter(trimmed, ","), convert: func(b []byte) (*teo.Document, error) {
-			return convert.FromCSV(b, &convert.Options{RootName: "items"})
-		}},
-		{enabled: first != '{' && first != '[' && hasRowsAndDelimiter(trimmed, "\t"), convert: func(b []byte) (*teo.Document, error) {
-			return convert.FromTSV(b, &convert.Options{RootName: "items"})
-		}},
 		{enabled: strings.Contains(trimmed, ":\n") || strings.Contains(trimmed, ":\r\n"), convert: func(b []byte) (*teo.Document, error) {
 			return convert.FromYAML(b, &convert.Options{RootName: "items"})
 		}},
@@ -548,10 +542,6 @@ func compactToolText(text string, minBytes int) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func hasRowsAndDelimiter(text, delimiter string) bool {
-	return strings.Count(text, "\n") > 0 && strings.Contains(text, delimiter)
 }
 
 func isSpace(b byte) bool {

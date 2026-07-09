@@ -116,7 +116,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestHelpBlock(t *testing.T) {
-	parsed, err := teo.Parse(teo.New().Help("Run `teo convert issues.csv --name issues`", "Run `teo validate output.teo`").String())
+	parsed, err := teo.Parse(teo.New().Help("Run `teo convert issues.json --name issues`", "Run `teo validate output.teo`").String())
 	noerr(t, err)
 	eq(t, len(parsed.Items), 1)
 	eq(t, len(parsed.Items[0].Help), 2)
